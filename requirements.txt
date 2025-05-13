@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+python-multipart
+groq
+langchain
+sentence-transformers
+faiss-cpu
+pdfminer.six
+tf-keras
