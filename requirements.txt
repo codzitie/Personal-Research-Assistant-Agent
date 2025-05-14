@@ -7,3 +7,8 @@ sentence-transformers
 faiss-cpu
 pdfminer.six
 tf-keras
+langchain_community
+langchain_groq
+langchain_ollama
+bs4
+scholarly

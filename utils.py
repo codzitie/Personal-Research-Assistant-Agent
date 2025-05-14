@@ -11,6 +11,7 @@ from langchain_core.prompts import PromptTemplate
 from typing import List, Dict, Tuple
 from langchain.agents import initialize_agent, AgentType
 from langchain.tools import Tool
+from langchain.schema import Document
 from langchain.chat_models import ChatOpenAI
 from langchain.embeddings import OpenAIEmbeddings
 # Global variable to store chat history
@@ -121,11 +122,30 @@ class ResearchAssistantRAG:
         # Create vector store
         db = FAISS.from_documents(docs, self.embeddings)
         self.global_retriever = db.as_retriever()
+
+    def _load_result_to_retriever(self, text_data: str):
+        """
+        Load result and create vector store retriever
+        
+        Args:
+            content_pdf_path: Path to the PDF file
+        """
+        
+        document = Document(page_content=text_data)
+        # Split into chunks
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
+        docs = text_splitter.split_documents([document])
+        
+        # Create vector store
+        db = FAISS.from_documents(docs, self.embeddings)
+        self.global_retriever = db.as_retriever()
+        
     
     def rag_with_research(self, 
                            question: str, 
                            content_pdf_path: str = None, 
-                           reset_history: bool = False) -> Tuple[str, List[Tuple[str, str]]]:
+                           reset_history: bool = False,
+                           force_research: bool = False) -> Tuple[str, List[Tuple[str, str]]]:
         """
         RAG function with research agent capabilities
         
@@ -148,9 +168,36 @@ class ResearchAssistantRAG:
             print('Processing PDF:', content_pdf_path)
             self._load_pdf_to_retriever(content_pdf_path)
         
-        # Research phase: Use agent to find relevant papers
-        research_results = self.research_agent.run(f"Find academic papers related to: {question}")
-        print("Research Results:", research_results)
+        # Determine if research is needed using a more sophisticated approach
+        needs_research = force_research
+        
+        if not needs_research:
+            # Use the LLM to determine if the question requires academic research
+            research_decision_prompt = f"""
+            Determine if the following question requires academic research to answer properly.
+            The question might be asking about papers, studies, or recent research,
+            OR it might simply state a research topic that should be looked up.
+            
+            Question: {question}
+            
+            Respond with only 'YES' if academic research is needed, or 'NO' if not.
+            """
+            
+            research_decision = self.llm.invoke(research_decision_prompt).content.strip().upper()
+            print(f"Research decision: {research_decision}")
+            needs_research = research_decision == "YES"
+        
+        # Only perform research if needed
+        research_results = ""
+        if needs_research:
+            print("Initiating research for question...")
+            research_results = self.research_agent.run(f"Find academic papers related to: {question}")
+            print("Research Results:", research_results)
+            self._load_result_to_retriever(research_results)
+            
+        else:
+            print("Skipping research phase - question doesn't appear to require it")
+
         
         # Prepare prompts for context-aware QA
         condense_question_prompt = PromptTemplate.from_template("""
@@ -170,9 +217,9 @@ class ResearchAssistantRAG:
         At present you will recieve title, doi, abstract and some informations of paper rather than it's content.
         Try interpreting with those information and explain it.
 
-        Research Results: {research_results}
-        
         Question: {question}
+                                                 
+        Context: {context}
         
         Chat History: {chat_history}
         
@@ -199,13 +246,12 @@ class ResearchAssistantRAG:
             memory=memory,
             condense_question_prompt=condense_question_prompt,
             combine_docs_chain_kwargs={
-                "prompt": qa_prompt, 
-                "research_results": research_results
+                "prompt": qa_prompt
             }
         )
         
         # Run the chain
-        result = qa({"question": question, "research_results": research_results})
+        result = qa({"question": question})
         answer = result["answer"]
         # else:
         #     # Fallback to agent-only response if no retriever

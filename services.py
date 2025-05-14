@@ -1,7 +1,7 @@
 from fastapi import UploadFile
 from utils import save_upload_file_temp, remove_temp_file, transcribe_and_rag,ResearchAssistantRAG
 import os
-from google_scolar.web_search import google_scholar_search
+from google_scolar.web_search import google_scholar_search,advanced_google_scholar_search
 
 research_assistant = None
 
@@ -24,7 +24,7 @@ async def process_text_question(question: str, pdf_file : UploadFile = None, cha
 
 def create_object():
     global research_assistant
-    research_assistant = ResearchAssistantRAG(google_scholar_search)
+    research_assistant = ResearchAssistantRAG(advanced_google_scholar_search)
     return research_assistant
 
 async def process_audio_question(pdf_file: UploadFile, audio_file: UploadFile):

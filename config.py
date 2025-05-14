@@ -5,7 +5,7 @@ from langchain_groq import ChatGroq
 from langchain_ollama import ChatOllama
 
 
-GROQ_API_KEY = "ur api key"
+GROQ_API_KEY = "api key"
 MODEL_PATH = "sentence-transformers/all-MiniLM-l6-v2"
 
 client = Groq(api_key=GROQ_API_KEY)
