@@ -3,6 +3,8 @@ from bs4 import BeautifulSoup
 import time
 from scholarly import scholarly
 
+# research_obj = ResearchAssistantRAG()
+urls = None
 def google_scholar_search(query, num_results=5):
     """
     Function to search Google Scholar using a simple keyword query.
@@ -77,6 +79,7 @@ def advanced_google_scholar_search(query, author=None, year_range=None, num_resu
     Returns:
     list: A list of dictionaries containing search results.
     """
+    global urls
     # Prepare the advanced search URL
     search_url = "https://scholar.google.com/scholar?"
     
@@ -136,9 +139,19 @@ def advanced_google_scholar_search(query, author=None, year_range=None, num_resu
         }
         results.append(result_data)
         count += 1
-
+    urls = results
+    print('uvrlsse@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@',urls)
     return results
-
+# hie seizure prediction
+# query = "hie seizure prediction"
+# results = google_scholar_search(query, num_results=5)
+# print("Results for keyword search:")
+# for result in results:
+#     print(f"\nTitle: {result['Title']}")
+#     print(f"Authors: {result['Authors']}")
+#     print(f"Abstract: {result['Abstract']}")
+#     print(f"URL: {result['URL']}")
+#     print("-" * 80)
 # Example usage:
 # if __name__ == "__main__":
 

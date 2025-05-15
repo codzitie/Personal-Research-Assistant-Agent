@@ -12,3 +12,4 @@ langchain_groq
 langchain_ollama
 bs4
 scholarly
+firecrawl-py

@@ -1,7 +1,9 @@
 from fastapi import UploadFile
 from utils import save_upload_file_temp, remove_temp_file, transcribe_and_rag,ResearchAssistantRAG
 import os
+# from scihub import scihub_pdf
 from google_scolar.web_search import google_scholar_search,advanced_google_scholar_search
+
 
 research_assistant = None
 
