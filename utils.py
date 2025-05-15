@@ -18,6 +18,8 @@ from difflib import get_close_matches
 import json
 from langchain.schema import Document
 import re
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 import google_scolar.web_search as web_search
 from langchain.chat_models import ChatOpenAI
 from langchain.embeddings import OpenAIEmbeddings
@@ -165,9 +167,10 @@ class ResearchAssistantRAG:
     
     def _scihub_pdf(self,query):
 
-        scihub_url = ''
-        doi_or_url = ''
-        self.download_paper_tool(query)
+        scihub_url = 'https://sci-hub.se/'
+        doi_or_url = self.sentence_similarity(query)
+        print('doi $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$',doi_or_url)
+        
         # Step 1: Fetch the HTML page from Sci-Hub
         response = requests.get(f"{scihub_url}/{doi_or_url}")
         response.raise_for_status()
@@ -199,30 +202,33 @@ class ResearchAssistantRAG:
         else:
             print("PDF embed not found.")
 
-    def download_paper_tool(self,query: str) -> str:
+    def sentence_similarity(query: str, url_list: list, threshold: float = 0.3):
         """
-        Tool to download or return the link of a specific paper based on title and/or author.
+        Returns the best matching entry from url_list based on TF-IDF cosine similarity with the query.
         """
-        if not self.url:
-            return "No URLs available to search from. Please run a prior research query first."
-        
-        matches = []
-        for entry in self.url:
-            if query.lower() in entry['Title'].lower() or query.lower() in entry['Authors'].lower():
-                matches.append(entry)
+        titles = [entry['Title'] for entry in url_list]
 
-        # If no direct matches, try fuzzy match
-        if not matches:
-            titles = [entry['Title'] for entry in self.url]
-            close = get_close_matches(query, titles, n=1, cutoff=0.5)
-            if close:
-                matches = [entry for entry in self.url if entry['Title'] == close[0]]
+        # Build TF-IDF vectors
+        vectorizer = TfidfVectorizer().fit([query] + titles)
+        query_vec = vectorizer.transform([query])
+        title_vecs = vectorizer.transform(titles)
 
-        if matches:
-            paper = matches[0]
-            return f"Title: {paper['Title']}\nAuthors: {paper['Authors']}\nURL: {paper['URL']}"
+        # Compute cosine similarities
+        scores = cosine_similarity(query_vec, title_vecs)[0]
+
+        # Get index of best match above threshold
+        best_idx = scores.argmax()
+        best_score = scores[best_idx]
+
+        if best_score >= threshold:
+            paper = url_list[best_idx]
+            return {
+                "URL": paper["URL"],
+                "Score": round(best_score, 4)
+            }
         else:
-            return f"No matching paper found for: {query}"
+            return "No sufficiently similar title found."
+    
 
     def _determine_research_approach(self, question: str):
         """
