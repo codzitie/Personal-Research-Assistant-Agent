@@ -1,5 +1,5 @@
 from fastapi import UploadFile
-from utils import save_upload_file_temp, remove_temp_file, transcribe_and_rag,ResearchAssistantRAG
+from research_agent import ResearchAssistantRAG
 import os
 # from scihub import scihub_pdf
 from google_scolar.web_search import google_scholar_search,advanced_google_scholar_search
@@ -28,11 +28,3 @@ def create_object():
     global research_assistant
     research_assistant = ResearchAssistantRAG(advanced_google_scholar_search)
     return research_assistant
-
-async def process_audio_question(pdf_file: UploadFile, audio_file: UploadFile):
-    pdf_path = await save_upload_file_temp(pdf_file)
-    audio_path = await save_upload_file_temp(audio_file)
-    result = transcribe_and_rag(pdf_path, audio_path)
-    remove_temp_file(pdf_path)
-    remove_temp_file(audio_path)
-    return {"answer": result}

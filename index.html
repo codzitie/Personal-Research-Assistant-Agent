@@ -48,16 +48,9 @@
 <body>
     <div class="container">
         <div class="card">
-            <h2 class="card-title text-center">Upload PDF and Audio</h2>
+            <h2 class="card-title text-center">Personal Research Assistant Agent</h2>
             <form id="uploadForm" enctype="multipart/form-data">
-                <div class="mb-3">
-                    <label for="pdf_file" class="form-label">PDF File:</label>
-                    <input type="file" id="pdf_file" name="pdf_file" class="form-control" accept=".pdf">
-                </div>
-                <div class="mb-3">
-                    <label for="audio_file" class="form-label">Audio File:</label>
-                    <input type="file" id="audio_file" name="audio_file" class="form-control" accept="audio/*">
-                </div>
+                
                 <div class="mb-3">
                     <label for="question_input" class="form-label">Your Question:</label>
                     <textarea id="question_input" name="question_input" placeholder="Enter your question here..." class="form-control"></textarea>
@@ -106,11 +99,11 @@
                 formData.append('session_id', currentSessionId);
             }
             
-            // Add the audio file if provided
-            const audioFile = document.getElementById('audio_file').files[0];
-            if (audioFile) {
-                formData.append('audio_file', audioFile);
-            }
+            // // Add the audio file if provided
+            // const audioFile = document.getElementById('audio_file').files[0];
+            // if (audioFile) {
+            //     formData.append('audio_file', audioFile);
+            // }
             
             try {
                 const response = await fetch('/ask_text', {

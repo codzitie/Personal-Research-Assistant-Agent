@@ -1,13 +1,23 @@
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from groq import Groq
-
+from langchain_google_genai import ChatGoogleGenerativeAI   
 from langchain_groq import ChatGroq
 from langchain_ollama import ChatOllama
+from langchain_deepseek import ChatDeepSeek
+import os
+import ollama
 
+from dotenv import load_dotenv
 
-GROQ_API_KEY = "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"
+# Load environment variables from .env file
+load_dotenv()
+
+# Access them
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GEMINI_API = os.getenv("GEMINI_API")
+
 MODEL_PATH = "sentence-transformers/all-MiniLM-l6-v2"
-
+os.environ["GOOGLE_API_KEY"] = "AIzaSyALfyuFR2ChYpfPmTiqUqq1c6co1BeUD28"
 client = Groq(api_key=GROQ_API_KEY)
 
 model_kwargs = {'device': 'cpu'}
@@ -19,4 +29,14 @@ embeddings = HuggingFaceEmbeddings(
     encode_kwargs=encode_kwargs
 )
 
-llm = ChatGroq(temperature=0, groq_api_key=GROQ_API_KEY, model_name="llama3-70b-8192")
+# llm = ChatGroq(temperature=0, groq_api_key=GROQ_API_KEY, model_name="llama3-70b-8192")
+llm = ChatGoogleGenerativeAI(
+    model="gemini-2.0-flash",   # or "gemini-1.5-pro"
+    temperature=0.1,
+    convert_system_message_to_human=True  # Optional: improves compatibility
+)
+# response = ollama.chat(
+#         model="deepseek-r1",
+#         messages=[{"role": "user", "content": formatted_prompt}],
+#     )
+# llm = ChatOllama(model="llama3.2")
