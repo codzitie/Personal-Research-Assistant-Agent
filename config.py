@@ -17,7 +17,6 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GEMINI_API = os.getenv("GEMINI_API")
 
 MODEL_PATH = "sentence-transformers/all-MiniLM-l6-v2"
-os.environ["GOOGLE_API_KEY"] = "AIzaSyALfyuFR2ChYpfPmTiqUqq1c6co1BeUD28"
 client = Groq(api_key=GROQ_API_KEY)
 
 model_kwargs = {'device': 'cpu'}
