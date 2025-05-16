@@ -4,7 +4,9 @@
 
 1. Clone the repository
 
-2. Install the requirements
+2. Create a virtual environment `python -m venv venv` and activate it.
+
+3. Install the requirements `pip install -r requirements.txt`
    
 3. Create a `.env` file
 
@@ -16,3 +18,5 @@
   ```
 
 4. Run the main.py file
+
+5. Website will be hosted in localhost:8000
