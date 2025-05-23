@@ -14,10 +14,10 @@ load_dotenv()
 
 # Access them
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-GEMINI_API = os.getenv("GEMINI_API")
-
+GOOGLE_API_KEY = os.getenv("GEMINI-API")
+print('groq',GROQ_API_KEY,'\n','gemini',GOOGLE_API_KEY)
 MODEL_PATH = "sentence-transformers/all-MiniLM-l6-v2"
-os.environ["GOOGLE_API_KEY"] = "AIzaSyALfyuFR2ChYpfPmTiqUqq1c6co1BeUD28"
+os.environ["GOOGLE_API_KEY"] = GOOGLE_API_KEY
 client = Groq(api_key=GROQ_API_KEY)
 
 model_kwargs = {'device': 'cpu'}
@@ -31,9 +31,9 @@ embeddings = HuggingFaceEmbeddings(
 
 # llm = ChatGroq(temperature=0, groq_api_key=GROQ_API_KEY, model_name="llama3-70b-8192")
 llm = ChatGoogleGenerativeAI(
-    model="gemini-2.0-flash",   # or "gemini-1.5-pro"
+    model="gemini-2.0-flash",  
     temperature=0.1,
-    convert_system_message_to_human=True  # Optional: improves compatibility
+    convert_system_message_to_human=True 
 )
 # response = ollama.chat(
 #         model="deepseek-r1",

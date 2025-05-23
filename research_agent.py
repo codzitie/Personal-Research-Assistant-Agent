@@ -136,11 +136,9 @@ class ResearchAssistantRAG:
         self.global_retriever = db.as_retriever()
     
     def _scihub_pdf(self,query):
-        print('in scihub &#&#&#&#&$&$&$&&#&#&##&&#______________')
+        print('in scihub ')
         scihub_url = 'https://sci-hub.se/'
         doi_or_url,title = self._sentence_similarity(query=query,url_list=self.url)
-        print('doi url *********',doi_or_url)
-    
         # Step 1: Fetch the HTML page from Sci-Hub
         response = requests.get(f"{scihub_url}/{doi_or_url}")
         response.raise_for_status()
@@ -160,6 +158,7 @@ class ResearchAssistantRAG:
             # Step 4: Download the PDF
             pdf_response = requests.get(pdf_url, stream=True)
             pdf_response.raise_for_status()
+            
 
             # Clean filename: remove illegal characters
             safe_filename = re.sub(r'[^\w\-_.]', '_', title) 
@@ -185,7 +184,6 @@ class ResearchAssistantRAG:
         Returns the best matching entry from url_list based on TF-IDF cosine similarity with the query.
         """
         # url
-        print('url%^&^%$%^&%$%^&^%^&',url_list)
         titles = [entry['Title'] for entry in url_list]
 
         # Build TF-IDF vectors
@@ -202,8 +200,6 @@ class ResearchAssistantRAG:
 
         if best_score >= threshold:
             paper = url_list[best_idx]
-            print('papers22222222222222222222',paper)
-            print('tf-idf result',paper["URL"])
             return paper["URL"],paper["Title"]
             
         else:
@@ -267,6 +263,8 @@ class ResearchAssistantRAG:
             AI: (Lists some papers, including 'Attention is All You Need', and this paper was downloaded and processed)
             Current User Question: "Explain the methodology in 'Attention is All You Need' more."
             → {{"category": 4, "use_search": false, "use_download": false, "specific_doi": "DOI_of_Attention_is_All_You_Need_if_known", "explanation": "User is asking a follow-up about a paper already processed. Answer from existing context."}}
+
+            Keep in mind that return only json as output
             """
 
     def rag_with_research(self, 
@@ -338,52 +336,47 @@ class ResearchAssistantRAG:
             # Invoke the chain and get the response string
             chain_response_dict = decision_chain.invoke({"input": question})
             self.guidance = chain_response_dict[decision_chain.output_key] 
-            # print(f"Research decision: {research_decision}")
             needs_research =  "YES"
         
         # Only perform research if needed
         research_results = ""
     
-            # Get guidance on which tools to use
-        # self.guidance = self._determine_research_approach(question)
-        # print(f"Research approach: {self.guidance['explanation']}")
         print('guide',self.guidance)
-        
-        # json_str = json.dumps(self.guidance, indent=4)
-        cleaned = re.sub(r"```[a-zA-Z]*", "", self.guidance).replace("```", "").strip()
+        json_str = self.guidance
+        if not isinstance(json_str, dict):
+            # json_str = json.dumps(self.guidance, indent=4)
+            cleaned = re.sub(r"```[a-zA-Z]*", "", self.guidance).replace("```", "").strip()
+            match = re.search(r"\{.*?\}", cleaned, re.DOTALL)
+            if match:
+                # Step 2: Fix invalid JSON formatting
+                json_text = match.group(0)
+                cleaned = (
+                    json_text.replace("TRUE", "true")
+                        .replace("FALSE", "false")
+                        .replace("NULL", "null")
+                        .lower()  
+                )
 
-        # Step 2: Fix invalid JSON formatting
-        cleaned = (
-            cleaned.replace("TRUE", "true")
-                .replace("FALSE", "false")
-                .replace("NULL", "null")
-                .lower()  # Optional: convert keys to lowercase
-        )
-
-        # Step 3: Load as Python dictionary
-        json_str = json.loads(cleaned)
-        # Optional: Pretty print the result
-        # print(json.dumps(data, indent=4))
-        print('json_str$$$$$$$$$$$$$$$$$$$$$$$$$$$',json_str)
+                # Step 3: Load as Python dictionary
+                json_str = json.loads(cleaned)
+                print('json_str',json_str)
         if json_str['category'] == 1:  # General topic exploration
+            print('entering search . . . .')
             research_results = self.research_agent.run(
                 f"Find academic papers related to: {question}. Use ONLY the Google Scholar Search tool."
             )
             
         elif json_str['category'] == 2:  # Specific paper request
+            print('entering scihub search . . . .')
             retriever_check = False
-            # research_results = self.research_agent.run(
-            #     f"This query is about a specific paper related to: {question}. Use the download tool"
-            # )
             filename = self._scihub_pdf(question)
-            print('filename&&&&&&&&&&&&&&&&&&&',filename)
             if filename:
                 self._load_pdf_to_retriever(filename)
                 retriever_check = True
-            # self._load_result_to_retriever(research_results)
 
         elif json_str['category'] == 3:  # Both approaches needed
             retriever_check = False
+            print('entering both . . . .')
             research_results = self.research_agent.run(
                 f"Research this query thoroughly: {question}. First use Google Scholar Search to find relevant papers, then if a specific important paper is identified, download it using the Download Research Paper tool."
             )
@@ -398,7 +391,6 @@ class ResearchAssistantRAG:
             print("Skipping research phase - question doesn't appear to require it")
 
         self.url = web_search.urls
-        # print('urls^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^',self.url)
         print("Research Results:", research_results)
 
         if json_str['category'] != 1:
@@ -419,31 +411,41 @@ class ResearchAssistantRAG:
             """)
             
             qa_prompt = PromptTemplate.from_template("""
-                You are a helpful research assistant. You are given search results from Google Scholar that include the title, authors, and abstract of several papers.
+            You are a helpful research assistant. You are given the full text or detailed content of a scientific article.
 
-                Your job is to answer the user's question using only the information provided. Depending on the nature of the question:
+            Your task depends on the user's question:
 
-                - If the user asks a general research question (e.g., trends or applications in a field), analyze **relevant papers** from the context and summarize key insights from each.
-                - If the user asks about a **specific paper** (by title, author, or unique phrase), focus only on that paper and summarize the paper in detal.
-                - If the question is vague or general, summarize the papers one by one in bullet points, each containing:
-                - Title
-                - Authors
-                - Simplified explanation of the abstract (do not copy directly)
+            1. If the user asks for a general summary, provide a comprehensive overview that includes:
+                - **Title of the paper**
+                - **Authors** (if available)
+                - **Objective** of the research
+                - **Methods** used
+                - **Key findings and results**
+                - **Conclusions**
+                - **Applications or implications**
+                - **Limitations or future work**, if mentioned
 
-                Do not make up or guess information not found in the context. If the context does not have sufficient information to answer the question, say: **"Not enough data in the provided context."**
+            2. If the user asks about a **specific topic, method, result, or term**, extract and explain that part **in detail**, strictly based on the context. Do **not** provide information that is not explicitly present in the article.
 
-                ---
+            3. If the question is too vague, default to a detailed summary of the paper.
 
-                **Input Question:** {question}
+            4. If the context does not contain enough information to answer the question, respond with: **"Not enough data in the provided context."**
 
-                **Context (Google Scholar search results):** {context}
+            - Never copy from the text directly; always paraphrase in clear, concise language.
+            - Do not speculate or hallucinate. Only use facts and statements found in the provided article.
 
-                **Chat History:** {chat_history}
+            ---
 
-                ---
+            **User Question:** {question}
 
-                Respond with a clear, well-organized answer, grounded strictly in the provided context.
-                """)
+            **Article Content (Context):** {context}
+
+            **Chat History:** {chat_history}
+
+            ---
+
+            Provide a clear and well-organized response based only on the given article.
+            """)
                         
             
             # Add existing chat history to memory
@@ -479,6 +481,6 @@ class ResearchAssistantRAG:
                     f"   Abstract: {paper['Abstract']}\n\n"
                 )
 
-            self.global_chat_history.append((question, self.url))
+            self.global_chat_history.append((question, formatted_output))
             return formatted_output, self.global_chat_history
     

@@ -9,10 +9,6 @@ research_assistant = None
 
 async def process_text_question(question: str, pdf_file : UploadFile = None, chat_history=None):
     global research_assistant
-    if pdf_file:
-        temp_pdf_path = f"temp_{pdf_file.filename}"
-        with open(temp_pdf_path, "wb") as f:
-            f.write(await pdf_file.read())
     if not research_assistant:
         create_object()
     # Process with RAG

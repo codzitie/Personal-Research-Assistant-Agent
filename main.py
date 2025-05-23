@@ -17,12 +17,11 @@ async def root():
 
 @app.post("/ask_text")
 async def ask_text(question_input: str = Form(...)):
-    # response = await process_text_question(question_input, pdf_file)
+    response = await process_text_question(question_input)
     # print('resp',response)
-    print('hiiiiiiiiiiiiiiiiiiii')
-    return await process_text_question(question_input)
+    return response
+    # return await process_text_question(question_input)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
     
