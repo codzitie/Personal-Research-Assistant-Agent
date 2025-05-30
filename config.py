@@ -15,7 +15,6 @@ load_dotenv()
 # Access them
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GOOGLE_API_KEY = os.getenv("GEMINI-API")
-print('groq',GROQ_API_KEY,'\n','gemini',GOOGLE_API_KEY)
 MODEL_PATH = "sentence-transformers/all-MiniLM-l6-v2"
 os.environ["GOOGLE_API_KEY"] = GOOGLE_API_KEY
 client = Groq(api_key=GROQ_API_KEY)

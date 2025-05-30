@@ -1,5 +1,9 @@
 import os
 from config import client, embeddings, llm
+from scraper import scrape_it
+import asyncio
+from playwright.sync_api import sync_playwright
+from playwright.async_api import async_playwright
 from langchain.document_loaders import PDFMinerLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.vectorstores import FAISS
@@ -18,9 +22,11 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import google_scolar.web_search as web_search
 from langchain.chains import ConversationChain
+from urllib.parse import unquote, urljoin, urlparse, parse_qs
 from langchain.chat_models import ChatOpenAI
 from langchain.embeddings import OpenAIEmbeddings
-
+import nest_asyncio
+nest_asyncio.apply()
 # Global variable to store chat history
 global_chat_history = []
 # Global variable to store the initialized retriever (to avoid reprocessing the PDF each time)
@@ -53,6 +59,10 @@ class ResearchAssistantRAG:
         self.research_agent = self._create_research_agent()
 
         self.url = None
+
+        self.paper_url = None
+
+        self.paper_title = None
 
         self.memory = ConversationBufferMemory(
                 memory_key="chat_history",
@@ -135,11 +145,141 @@ class ResearchAssistantRAG:
         db = FAISS.from_documents(docs, self.embeddings)
         self.global_retriever = db.as_retriever()
     
+    def _scihub_pdf_playwright(self, query):
+        print("in scihub (playwright)")
+
+        scihub_url = 'https://sci-hub.se/'
+
+        doi_or_url, title = self._sentence_similarity(query=query, url_list=self.url)
+        target_url = f"{scihub_url}{doi_or_url}"
+
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=False, slow_mo=100)
+            context = browser.new_context()
+            page = context.new_page()
+
+            try:
+                print(f"Opening page: {target_url}")
+                page.goto(target_url, timeout=90000)
+
+                # Optional: Save page HTML for debugging
+                html = page.content()
+                with open("scihub_debug.html", "w", encoding="utf-8") as f:
+                    f.write(html)
+
+                # Wait for the embed tag that contains the PDF
+                page.wait_for_selector("embed#pdf", timeout=60000, state="attached")
+                embed_element = page.query_selector("embed#pdf")
+
+                if not embed_element:
+                    print("PDF embed not found.")
+                    browser.close()
+                    return None
+
+                pdf_url = embed_element.get_attribute('src')
+
+                # Fix relative URLs
+                if pdf_url.startswith('/'):
+                    pdf_url = scihub_url.rstrip('/') + pdf_url
+
+                print(f"PDF URL found: {pdf_url}")
+
+                # Clean the title to make a safe filename
+                safe_filename = re.sub(r'[^\w\-_.]', '_', 'paper-1')
+                if not safe_filename.endswith('.pdf'):
+                    safe_filename += '.pdf'
+
+                download_path = os.path.join("pdf", safe_filename)
+                os.makedirs(os.path.dirname(download_path), exist_ok=True)
+
+                # Download the PDF using requests
+                headers = {
+                    "User-Agent": "Mozilla/5.0",
+                    "Referer": scihub_url,
+                }
+                response = requests.get(pdf_url, stream=True)
+                response.raise_for_status()
+
+                with open(download_path, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+
+                print(f"PDF downloaded as: {download_path}")
+                browser.close()
+                return download_path
+            except Exception as e:
+                print(f"Error: {e}")
+                browser.close()
+                return None
+
+    async def download_pdf_with_playwright(self, query):
+        scihub_url = "https://sci-hub.se/"
+        save_dir = "pdf"
+        os.makedirs(save_dir, exist_ok=True)
+
+        doi_or_url, title = self._sentence_similarity(query=query, url_list=self.url)
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=False)
+            page = await browser.new_page()
+
+            target_url = f"{scihub_url}{doi_or_url}"
+            print(f"Opening {target_url} ...")
+            await page.goto(target_url, timeout=60000)
+
+            # Wait for either embed or iframe
+            try:
+                await page.wait_for_selector("embed#pdf, iframe", timeout=15000)
+            except:
+                raise Exception("PDF viewer not found.")
+
+            # Try getting the src of embed or iframe
+            pdf_url = await page.locator("embed#pdf").get_attribute("src")
+            if not pdf_url:
+                pdf_url = await page.locator("iframe").get_attribute("src")
+
+            if not pdf_url:
+                raise Exception("PDF embed not found.")
+
+            pdf_url = urljoin(scihub_url, pdf_url)  # Handles relative links properly
+
+            print("PDF link:", pdf_url)
+            print("🔍 You can visually verify the PDF in the opened browser.")
+            input("Press Enter to continue and download the PDF...")
+
+            # Trigger download
+            async with page.expect_download() as download_info:
+                await page.evaluate(f"""
+                    const link = document.createElement('a');
+                    link.href = "{pdf_url}";
+                    link.download = "";
+                    document.body.appendChild(link);
+                    link.click();
+                """)
+            download = await download_info.value
+
+            safe_filename = re.sub(r'[^\w\-_.]', '_', title) + ".pdf"
+            download_path = os.path.join(save_dir, safe_filename)
+            await download.save_as(download_path)
+
+            await browser.close()
+            return download_path
+
     def _scihub_pdf(self,query):
         print('in scihub ')
         scihub_url = 'https://sci-hub.se/'
+        
         doi_or_url,title = self._sentence_similarity(query=query,url_list=self.url)
         # Step 1: Fetch the HTML page from Sci-Hub
+        headers = {
+    'content-security-policy': 'upgrade-insecure-requests',
+    'Cookie': '__ddg10_=1748585839; __ddg1_=eCLvGkXIMD11pTqs7WXa; __ddg5_=2b54pkYldVN0HgCX; __ddg8_=KewqA7Ra3chVpaJW; __ddg9_=182.65.3.72; __ddgid_=hW9VEQqg860mgwUE; __ddgmark_=Sr4p2BRfMdEJCfej; refresh=1748585839.6917; session=8fe189a559034ec227566c943f52b5ff'
+    }
+        print('doi $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$',doi_or_url)
+
+        # Step 1: Fetch the HTML page from Sci-Hub
+        response = requests.request("POST", f"{scihub_url}/{doi_or_url}", headers=headers, data={})
         response = requests.get(f"{scihub_url}/{doi_or_url}")
         response.raise_for_status()
         # Step 2: Parse the HTML
@@ -200,6 +340,8 @@ class ResearchAssistantRAG:
 
         if best_score >= threshold:
             paper = url_list[best_idx]
+            self.paper_url = paper["URL"]
+            self.paper_title = paper["Title"]
             return paper["URL"],paper["Title"]
             
         else:
@@ -369,10 +511,12 @@ class ResearchAssistantRAG:
         elif json_str['category'] == 2:  # Specific paper request
             print('entering scihub search . . . .')
             retriever_check = False
-            filename = self._scihub_pdf(question)
+            filename = asyncio.run(self.download_pdf_with_playwright(question))
             if filename:
                 self._load_pdf_to_retriever(filename)
                 retriever_check = True
+            # else:
+            #     asyncio.run(scrape_it(self.paper_url))
 
         elif json_str['category'] == 3:  # Both approaches needed
             retriever_check = False
@@ -397,6 +541,8 @@ class ResearchAssistantRAG:
             if retriever_check == False:
                 fail_msg = 'Sorry for the inconvenience.... Access restricted for the paper mentoined'
                 return fail_msg, self.global_chat_history
+            if not self.global_retriever:
+                return 'Error in appication . . . . .'
             # Prepare prompts for context-aware QA
             condense_question_prompt = PromptTemplate.from_template("""
             Given the following conversation and a follow up question, rephrase the follow up question 
